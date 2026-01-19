@@ -1,9 +1,10 @@
 #ifndef HELPERS_1_H
 #define HELPERS_1_H
 
+#include <stdbool.h>
+
 // Declare any helper functions here
 void printString(char *s);
-int isLower(const char *s);
-int isHex(const char *s);
-char* copyLineHeap(const char *line);
+bool typeCheck(char *s);
+bool uidCheck(char *s);
 #endif

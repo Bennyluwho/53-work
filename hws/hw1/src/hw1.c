@@ -4,9 +4,9 @@
 
 // Part 1 Functions
 int getSubstrings(char *str,  char delim, char ** array, int maxSize) {
- if (str == NULL || array == NULL || maxSize < 1) return -1;
+    if (str == NULL || array == NULL || maxSize < 1) return -1;
     if (delim == '\0' || *str == '\0') return 0;
-
+    
     int count = 0;
     char *p = str;
 
@@ -18,7 +18,6 @@ int getSubstrings(char *str,  char delim, char ** array, int maxSize) {
         while (*p != '\0' && *p != delim) {
             p++;
         }
-
         if (*p == delim) {
             *p = '\0';
             p++;
@@ -26,7 +25,6 @@ int getSubstrings(char *str,  char delim, char ** array, int maxSize) {
     }
 
     return count;
-    return 0;
 }
 
 void parseMIPSfields(const uint32_t instruction, MIPSfields* f) {
@@ -43,58 +41,9 @@ void parseMIPSfields(const uint32_t instruction, MIPSfields* f) {
 }
 
 MIPSinstr* loadInstrFormat(char* line) {
-    if (line == NULL) return NULL;
-
-    // 1) copy so getSubstrings can safely write '\0'
-    char *buf = copyLineHeap(line);
-    if (!buf) return NULL;
-
-    char *parts[4];
-    int n = getSubstrings(buf, ' ', parts, 4);
-
-    if (n != 4) { free(buf); return NULL; }
-
-    char *type_s = *(parts + 0);
-    char *uid_s  = *(parts + 1);
-    char *mnem_s = *(parts + 2);
-    char *pret_s = *(parts + 3);
-
-    if (!type_s || *type_s == '\0' || *(type_s + 1) != '\0') { free(buf); return NULL; }
-    char type = *type_s;
-    if (!(type == 'r' || type == 'i' || type == 'j')) { free(buf); return NULL; }
-
-    if (!isHex(uid_s)) { free(buf); return NULL; }
-    char *end = NULL;
-    unsigned long uid_ul = strtoul(uid_s, &end, 16);
-    if (end == uid_s || *end != '\0' || uid_ul > 0xFFFFFFFFUL) { free(buf); return NULL; }
-
-    if (!isLower(mnem_s)) { free(buf); return NULL; }
-
-    end = NULL;
-    long pretty_l = strtol(pret_s, &end, 10);
-    if (end == pret_s || *end != '\0' || pretty_l < 0 || pretty_l > 10) { free(buf); return NULL; }
-
-    MIPSinstr *instr = malloc(sizeof *instr);
-    if (!instr) { free(buf); return NULL; }
-
-    const char *p = mnem_s;
-    size_t mlen = 0;
-    while (*p++) mlen++;
-
-    instr->mnemonic = malloc(mlen + 1);
-    if (!instr->mnemonic) { free(instr); free(buf); return NULL; }
-
-    const char *ms = mnem_s;
-    char *md = instr->mnemonic;
-    while ((*md++ = *ms++) != '\0') { }
-
-    instr->type = type;
-    instr->uid = (uint32_t)uid_ul;
-    instr->pretty = (uint8_t)pretty_l;
-    instr->usagecnt = 0; // always 0 as you said
-
-    free(buf);
-    return instr;
+    int test = getSubstrings(line, ' ', &line, 4);
+    printf("%d\n", test);
+    return (MIPSinstr*) 0xDEADBEEF;
 }
 
 // Part 2 Functions

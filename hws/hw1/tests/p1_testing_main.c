@@ -7,6 +7,8 @@
 
 
 int main() {
+    /*
+
     // Sample testing main for part 1, one test per function
     // NOTE: no where near exhaustive
     char* toSubstring2 = "-1a22.3aaaaaaa+";  // pointer to static string!
@@ -47,6 +49,8 @@ int main() {
 
 
     free(myFields);
+
+    */
 
     // Test for loadInstrFormat
     MIPSinstr* myInstr = loadInstrFormat("r 00000009 jalr 2\n"); // Can you call getStubstrings on this string directly?

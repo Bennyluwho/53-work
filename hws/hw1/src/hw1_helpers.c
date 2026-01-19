@@ -9,49 +9,24 @@ void printString(char *s) {
 	printf("\n");
 }
 
-int isLower(const char *s) {
-	if (s == NULL || *s == '\0') return 0;
-	const char *p = s;
-	while(*p) {
-		if (*p < 'a' || *p > 'z') return 0;
-		p++;
-	}
-	return 1;
+bool typeCheck(char *s) {
+	if(*s == 'r' || *s == 'i' || *s == 'j') return true;
+	return false;
 }
 
-int isHex(const char *s){
-	if (s == NULL || *s == '\0') return 0;
-	int len = 0;
-	const char *p = s;
-	while(*p) {
-		char c = *p;
+bool isHexChar(char c) {
+    if (c >= '0' && c <= '9') return true;
+    if (c >= 'a' && c <= 'f') return true;
+    if (c >= 'A' && c <= 'F') return true;
+    return false;
+}
 
-        int is_digit = (c >= '0' && c <= '9');
-        int is_lower = (c >= 'a' && c <= 'f');
-        int is_upper = (c >= 'A' && c <= 'F');
-
-        if (!(is_digit || is_lower || is_upper))
-            return 0;
-
-        len++;
-        if (len > 8) return 0;
-
+bool uidCheck(char *s) {
+	char *p = s;
+	while (*p != ' ') {
+		printf("%c\n", *p);
+        if(!isHexChar(*p)) return false;
         p++;
-	}
-	return 1;
+    }
+	return true;
 }
-
-char* copyLineHeap(const char *line) {
-	const char *p = line;
-	size_t n = 0;
-	while(*p++) n++;
-
-	char *buf = malloc(n + 1);
-	if (!buf) return NULL;
-
-	const char *src = line;
-    char *dst = buf;
-    while ((*dst++ = *src++) != '\0') { }
-    return buf;
-}
-
