@@ -68,8 +68,9 @@ int main(int argc, char* argv[]) {
     PrintLinkedList(list, stdout);
     printf("\n");
 
+
     // Delete the list  - Need to implement this function for HW 
-    // DestroyList(&list);
+    DestroyList(&list);
 
     return 0;
 }

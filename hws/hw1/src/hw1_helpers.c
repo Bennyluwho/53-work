@@ -9,6 +9,17 @@ void printString(char *s) {
 	printf("\n");
 }
 
+int myStrlen(char *s, char delim) {
+    int count = 0;
+
+    while(*s != delim) {
+        s++;
+        count++;
+    }
+
+    return count + 1;
+}
+
 bool typeCheck(char *s, char *out) {
 	if(*s == 'r' || *s == 'i' || *s == 'j') {
 		*out = *s;
@@ -38,13 +49,13 @@ bool uidCheck(char *s, uint32_t *out) {
 
 	if (*p == ' ' || *p == '\n' || *p == '\0') return false;
 
-	while (*p != ' ') {
+	while (*p != '\0' && *p != '\n' && *p != ' ' && *p != '\t') {
         if(!isHexChar(*p)) return false;
 
 		value = (value << 4) | hexDigitVal(*p);
         p++;
     }
-	
+
 	*out = value;
 	return true;
 }

@@ -7,6 +7,7 @@
 
 // Declare any helper functions here
 void printString(char *s);
+int myStrlen(char *s, char delim);
 bool typeCheck(char *s, char *out);
 bool uidCheck(char *s, uint32_t *out);
 bool mnemonicCheck(char *s, char **out);

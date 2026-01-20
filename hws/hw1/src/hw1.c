@@ -41,42 +41,83 @@ void parseMIPSfields(const uint32_t instruction, MIPSfields* f) {
 }
 
 MIPSinstr* loadInstrFormat(char* line) {
-     char *p = line;
+    if(line == NULL) return NULL;
+    char* toSubstring = malloc(myStrlen(line, '\n')*sizeof(char));
+    char* toSubstringSeek = toSubstring;
+    while (*line != '\0' && *line != '\n') {
+    *toSubstringSeek++ = *line++;
+    }
+    *toSubstringSeek = '\0';
 
-    while (*p == ' ' || *p == '\t' || *p == '\n') p++;
 
-    char type;
-    if (!typeCheck(p, &type)) return NULL;
+    int size = 4;
+    char **substrings = malloc(4*sizeof(char *));
+    if (!substrings) { 
+        free(toSubstring); 
+        return NULL; 
+    }
 
-    while (*p != ' ' && *p != '\n' && *p != '\0') p++;
-    while (*p == ' ' || *p == '\t' || *p == '\n') p++;
-
-    uint32_t uid;
-    if (!uidCheck(p, &uid)) return NULL;
-
-    while (*p != ' ' && *p != '\n' && *p != '\0') p++;
-    while (*p == ' ' || *p == '\t' || *p == '\n') p++;
-
-    char *mnemonic;
-    if (!mnemonicCheck(p, &mnemonic)) return NULL;
-
-    while (*p != ' ' && *p != '\n' && *p != '\0') p++;
-    while (*p == ' ' || *p == '\t' || *p == '\n') p++;
-
-    int pretty;
-    if (!prettyCheck(p, &pretty)) return NULL;
-
-    MIPSinstr *instr = malloc(sizeof(MIPSinstr));
-    if (instr == NULL) {
+    if (getSubstrings(toSubstring, ' ', substrings, 4) != 4) {
+        free(substrings);
+        free(toSubstring);
         return NULL;
     }
 
+    char type;
+    if (!typeCheck(*substrings, &type)) {
+        free(substrings);
+        free(toSubstring);
+        return NULL;
+    }
+
+    uint32_t uid;
+    if (!uidCheck(*(substrings + 1), &uid)) {
+        free(substrings);
+        free(toSubstring);
+        return NULL;
+    }
+
+    char *mnemonicStart;
+    if (!mnemonicCheck(*(substrings + 2), &mnemonicStart)) {
+        free(substrings);
+        free(toSubstring);
+        return NULL;
+    }
+
+    int pretty;
+    if (!prettyCheck(*(substrings + 3), &pretty)) {
+        free(substrings);
+        free(toSubstring);
+        return NULL;
+    }
+
+    MIPSinstr *instr = malloc(sizeof(MIPSinstr));
+    if (!instr) {
+        free(substrings);
+        free(toSubstring);
+        return NULL;
+    }
+
+    int mlen = myStrlen(mnemonicStart, '\0');
+    instr->mnemonic = malloc(mlen + 1);
+    if (!instr->mnemonic) {
+        free(instr);
+        free(substrings);
+        free(toSubstring);
+        return NULL;
+    }
+
+    char *md = instr->mnemonic;
+    char *ms = mnemonicStart;
+    while ((*md++ = *ms++)) { }
+
     instr->type = type;
     instr->uid = uid;
-    instr->mnemonic = mnemonic;
     instr->pretty = pretty;
     instr->usagecnt = 0;
 
+    free(substrings);
+    free(toSubstring);
     return instr;
 }
 
@@ -119,14 +160,32 @@ void MIPSinstr_Deleter(void* data) {
 }
 
 node_t* FindInList(list_t* list, void* token) {
+    if (list == NULL || token == NULL) return NULL;
 
-    return (node_t*) 0xDEADBEEF;
+    node_t *p = list->head;
+    while(p != NULL) {
+        if(MIPSinstr_uidComparator(p->data, token) == 0) return p;
+        p = p->next;
+    }
+
+    return NULL;
 }
 
 void DestroyList(list_t** list)  {
+    if (list == NULL || *list == NULL) return;
 
+    node_t *p = (*list)->head;
+    while (p != NULL) {
+        node_t *next = p->next;
+        if ((*list)->deleter != NULL) {
+            (*list)->deleter(p->data);
+        }
+        free(p);
+        p = next;
+    }
+    free(*list);
+    *list = NULL;
 }
-
 
 // Part 3 Functions
 list_t* createMIPSinstrList(FILE* IMAPFILE) {
