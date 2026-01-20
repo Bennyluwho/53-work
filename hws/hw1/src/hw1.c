@@ -41,23 +41,81 @@ void parseMIPSfields(const uint32_t instruction, MIPSfields* f) {
 }
 
 MIPSinstr* loadInstrFormat(char* line) {
-    int test = getSubstrings(line, ' ', &line, 4);
-    printf("%d\n", test);
-    return (MIPSinstr*) 0xDEADBEEF;
+     char *p = line;
+
+    while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+
+    char type;
+    if (!typeCheck(p, &type)) return NULL;
+
+    while (*p != ' ' && *p != '\n' && *p != '\0') p++;
+    while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+
+    uint32_t uid;
+    if (!uidCheck(p, &uid)) return NULL;
+
+    while (*p != ' ' && *p != '\n' && *p != '\0') p++;
+    while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+
+    char *mnemonic;
+    if (!mnemonicCheck(p, &mnemonic)) return NULL;
+
+    while (*p != ' ' && *p != '\n' && *p != '\0') p++;
+    while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+
+    int pretty;
+    if (!prettyCheck(p, &pretty)) return NULL;
+
+    MIPSinstr *instr = malloc(sizeof(MIPSinstr));
+    if (instr == NULL) {
+        return NULL;
+    }
+
+    instr->type = type;
+    instr->uid = uid;
+    instr->mnemonic = mnemonic;
+    instr->pretty = pretty;
+    instr->usagecnt = 0;
+
+    return instr;
 }
 
 // Part 2 Functions
 int MIPSinstr_uidComparator(const void* s1, const void* s2) {
+    MIPSinstr *x = (MIPSinstr *)s1;
+    MIPSinstr *y = (MIPSinstr *)s2;
 
-    return 0xDEADBEEF;
+    if (x->uid < y->uid) return -1;
+    if (x->uid > y->uid) return 1;
+
+    return 0;
 }
 
 void MIPSinstr_Printer(void* data, void* fp) {
+    if (data == NULL || fp == NULL) return;
 
+    MIPSinstr *instr = (MIPSinstr *)data;
+    FILE *out = (FILE *)fp;
+
+    fprintf(out,
+            "%c\t%u\t%u\t%u\t%s\n",
+            instr->type,
+            instr->uid,
+            instr->pretty,
+            instr->usagecnt,
+            instr->mnemonic);
 }
 
 void MIPSinstr_Deleter(void* data) {
+    if (data == NULL) return;
 
+    MIPSinstr *instr = (MIPSinstr *)data;
+
+    if (instr->mnemonic != NULL) {
+        free(instr->mnemonic);
+    }
+
+    free(instr);
 }
 
 node_t* FindInList(list_t* list, void* token) {

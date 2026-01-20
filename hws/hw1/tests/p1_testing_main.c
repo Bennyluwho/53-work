@@ -65,7 +65,7 @@ int main() {
         printf("usagecnt = %d\n", myInstr->usagecnt);      // should be 0!
 
         // running valgrind will have memory leak here until you implement MIPSinstr_Deleter in Part 2
-        // MIPSinstr_Deleter(myInstr);
+        MIPSinstr_Deleter(myInstr);
         
         // After deletion where does myInstr point?
         if(myInstr == NULL)
