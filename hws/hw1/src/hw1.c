@@ -189,13 +189,39 @@ void DestroyList(list_t** list)  {
 
 // Part 3 Functions
 list_t* createMIPSinstrList(FILE* IMAPFILE) {
+    if(IMAPFILE == NULL) return NULL;
+    
+    list_t *list = CreateList(&MIPSinstr_uidComparator, &MIPSinstr_Printer, &MIPSinstr_Deleter);
+    
+    char *line = NULL;
+    size_t cap = 0;
 
-    return (list_t*) 0xDEADBEEF;
+    while (getline(&line, &cap, IMAPFILE) != -1) {
+        MIPSinstr *instr = loadInstrFormat(line);
+        if(instr == NULL || FindInList(list, instr)) {
+            free(line);
+            DestroyList(&list);
+            return NULL;
+        }
+        InsertAtHead(list, instr);
+    }
+
+
+
+    free(line);
+    return list;
 }
 
 int printInstr(MIPSfields* instr, list_t* MIPSinstrList, char** regNames, FILE* OUTFILE) {
+    MIPSinstr key;
+    key.uid = instr->uid;
 
-    return 0xDEADBEEF;
+    node_t *p = FindInList(MIPSinstrList, &key);
+    if(p == NULL) return 0;
+
+    MIPSinstr_Printer(p->data, stdout);
+
+    return 6767;
 }
 
 

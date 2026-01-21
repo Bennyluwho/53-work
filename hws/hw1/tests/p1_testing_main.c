@@ -37,6 +37,7 @@ int main() {
     MIPSfields* myFields = malloc(sizeof(MIPSfields));    
     parseMIPSfields(instrValue, myFields);
 
+    printf("---------------------------------------------------------------\n");
     printf("opcode = %u\n", myFields->opcode);
     printf("rs = %u\n", myFields->rs);
     printf("rt = %u\n", myFields->rt);
@@ -46,6 +47,8 @@ int main() {
     printf("immediate16 = %u\n", myFields->immediate16);
     printf("immediate26 = %u\n", myFields->immediate26);
     printf("uid = %u\n", myFields->uid);
+    printf("---------------------------------------------------------------\n");
+
 
 
     free(myFields);
