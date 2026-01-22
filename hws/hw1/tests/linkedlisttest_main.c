@@ -89,25 +89,33 @@ int main(int argc, char* argv[]) {
 
     list_t *list = createMIPSinstrList(stdin);
     char* humanRegisters = "$zero,$at,$v0,$v1,$a0,$a1,$a2,$a3,$t0,$t1,$t2,$t3,$t4,$t5,$t6,$t7,$s0,$s1,$s2,$s3,$s4,$s5,$s6,$s7,$t8,$t9,$k0,$k1,$gp,$sp,$fp,$ra";
+    char* numericRegisters ="$0,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31";
+
 
 
     //look inside instr_map.txt and the 2nd value (uid) to test
+
+    uint32_t instrValue1 = 0x24080539; 
+    uint32_t instrValue2 = 0x8d8c0000; 
+    uint32_t instrValue3 = 0x3c011001; 
+    uint32_t instrValue4 = 0x01004020; 
+    
     MIPSfields* test1 = malloc(sizeof(MIPSfields));
     MIPSfields* test2 = malloc(sizeof(MIPSfields));
     MIPSfields* test3 = malloc(sizeof(MIPSfields));
     MIPSfields* test4 = malloc(sizeof(MIPSfields));
+
+    parseMIPSfields(instrValue1, test1);
+    parseMIPSfields(instrValue2, test2);
+    parseMIPSfields(instrValue3, test3);
+    parseMIPSfields(instrValue4, test4);
     
-    test1->uid = 0x20000000;
-    test2->uid = 0x00000004;
-    test3->uid = 0x0000002b;
-    test4->uid = 0xffffffff;
+    printf("%d\n",printInstr(test1, list, &humanRegisters, stdout));
 
-    printf("%d\n",printInstr(test4, list, &humanRegisters, stdout));
-
-    free(test1);
-    free(test2);
-    free(test3);
-    free(test4);
+    free(test1); //pretty 2
+    free(test2); //pretty 4
+    free(test3); //pretty 10
+    free(test4); //pretty 3
     DestroyList(&list);
     return 0;
 }

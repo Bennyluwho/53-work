@@ -42,6 +42,7 @@ void parseMIPSfields(const uint32_t instruction, MIPSfields* f) {
 
 MIPSinstr* loadInstrFormat(char* line) {
     if(line == NULL) return NULL;
+
     char* toSubstring = malloc(myStrlen(line, '\n')*sizeof(char));
     char* toSubstringSeek = toSubstring;
     while (*line != '\0' && *line != '\n') {
@@ -213,15 +214,81 @@ list_t* createMIPSinstrList(FILE* IMAPFILE) {
 }
 
 int printInstr(MIPSfields* instr, list_t* MIPSinstrList, char** regNames, FILE* OUTFILE) {
+    
+    //creates a temp MIPSinstr to search the linked list
     MIPSinstr key;
     key.uid = instr->uid;
 
+    //after the MIPSinstr uid matches with a node in the LL point to it so we can manipulate its data
+    //ensure its found by using the FindInList fuction (NULL == not found)
     node_t *p = FindInList(MIPSinstrList, &key);
     if(p == NULL) return 0;
 
-    MIPSinstr_Printer(p->data, stdout);
+    //now process the regnames using the getSubstrings() function. As hinted in the hw doc.
+    //should index the reg values from *(subs) eg.(subs+1 == subs[1])***
+    // char *buf = NULL;
+    // char **subs = makeSubstringsArray(*regNames, 32, ',', &buf);
+    // // if(!subs) return 0;
 
-    return 6767;
+    // //BIG BOI BUG FIX!!
+    // fprintf(OUTFILE, "%s\n", *(regNames+instr->rd));
+    // fprintf(OUTFILE, "i am slow????");
+    // printf("%s\n", *(regNames+instr->rd));
+
+    // free(subs);
+    // free(buf);
+    // return 6767;
+
+    //use switch/cases to manipulate the MIPSinstr node as well as print in its specified pretty format
+    //  printf("%d\n",((MIPSinstr *)p->data)->pretty);
+    // printf("%d\n",((MIPSinstr *)p->data)->usagecnt);
+
+    //base format for the cases below**
+    //fprintf(OUTFILE, "%s %s\n", ((MIPSinstr *)p->data)->mnemonic);
+    //TODO: fix this string array!!!
+    switch(((MIPSinstr *)p->data)->pretty) {
+        case 0:
+            fprintf(OUTFILE, "%s %s\n", ((MIPSinstr *)p->data)->mnemonic,*(regNames+instr->rd));
+            break;
+        case 1:
+            fprintf(OUTFILE, "%s %s, %s\n", ((MIPSinstr *)p->data)->mnemonic,*(regNames+instr->rs), *(regNames+instr->rt));
+            break;
+        case 2:
+            fprintf(OUTFILE,"%s %s, %s, 0x%x\n", ((MIPSinstr *)p->data)->mnemonic, *(regNames+instr->rt), *(regNames+instr->rs), instr->immediate16);
+            break;
+        case 3:
+            fprintf(OUTFILE, "%s %s, %s, %s\n", ((MIPSinstr *)p->data)->mnemonic, *(regNames+instr->rd), *(regNames+instr->rs), *(regNames+instr->rt));
+            break;
+        case 4:
+            fprintf(OUTFILE, "%s %s, 0x%x(%s)\n", ((MIPSinstr *)p->data)->mnemonic, *(regNames+instr->rt), instr->immediate16, *(regNames+instr->rs));
+            break;
+        case 5:
+            fprintf(OUTFILE, "%s\n", ((MIPSinstr *)p->data)->mnemonic);
+            break;
+        case 6:
+            fprintf(OUTFILE, "%s 0x%x\n", ((MIPSinstr *)p->data)->mnemonic, instr->immediate26);
+            break;
+        case 7:
+            fprintf(OUTFILE, "%s %s, 0x%x\n", ((MIPSinstr *)p->data)->mnemonic, *(regNames+instr->rs), instr->immediate16);
+            break;
+        case 8:
+            fprintf(OUTFILE, "%s %s, %s, 0x%x\n", ((MIPSinstr *)p->data)->mnemonic, *(regNames+instr->rd), *(regNames+instr->rs), instr->shamt);
+            break;
+        case 9:
+            fprintf(OUTFILE, "%s %s, %s, 0x%x\n", ((MIPSinstr *)p->data)->mnemonic, *(regNames+instr->rs), *(regNames+instr->rt), instr->immediate16);
+            break;
+        case 10:
+            fprintf(OUTFILE, "%s %s, 0x%x\n", ((MIPSinstr *)p->data)->mnemonic, *(regNames+instr->rt), instr->immediate16);
+            break;
+    }
+
+
+    ((MIPSinstr *)p->data)->usagecnt++;
+    // MIPSinstr_Printer(p->data, stdout);
+
+    // free(subs);
+    // free(buf);
+    return 1;
 }
 
 

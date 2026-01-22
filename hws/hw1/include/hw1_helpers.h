@@ -11,6 +11,7 @@
 // Declare any helper functions here
 void printString(char *s);
 int myStrlen(char *s, char delim);
+char **makeSubstringsArray(const char *line, int size, char delim, char **out_buf);
 _Bool typeCheck(char *s, char *out);
 _Bool uidCheck(char *s, uint32_t *out);
 _Bool mnemonicCheck(char *s, char **out);

@@ -20,6 +20,37 @@ int myStrlen(char *s, char delim) {
     return count + 1;
 }
 
+char **makeSubstringsArray(const char *line, int size, char delim, char **out_buf) {
+    if (line == NULL || out_buf == NULL || size < 1) return NULL;
+
+    size_t len = myStrlen((char *)line, '\n');
+    char *buf = (char*)malloc((len + 1) * sizeof(char));
+    if(!buf) return NULL;
+
+    const char *src = line;
+    char *dst = buf;
+    while (*src != '\0' && *src != '\n') {
+        *dst++ = *src++;
+    }
+    *dst = '\0';
+
+    char **tokens = (char **)malloc((size_t)size * sizeof(char*));
+    if(!tokens) {
+        free(buf);
+        return NULL;
+    }
+
+    if(getSubstrings(buf, delim, tokens, size) != size) {
+        free(tokens);
+        free(buf);
+        return NULL;
+    }
+
+    *out_buf = buf;
+    return tokens;
+
+}
+
 bool typeCheck(char *s, char *out) {
 	if(*s == 'r' || *s == 'i' || *s == 'j') {
 		*out = *s;
