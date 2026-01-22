@@ -224,28 +224,7 @@ int printInstr(MIPSfields* instr, list_t* MIPSinstrList, char** regNames, FILE* 
     node_t *p = FindInList(MIPSinstrList, &key);
     if(p == NULL) return 0;
 
-    //now process the regnames using the getSubstrings() function. As hinted in the hw doc.
-    //should index the reg values from *(subs) eg.(subs+1 == subs[1])***
-    // char *buf = NULL;
-    // char **subs = makeSubstringsArray(*regNames, 32, ',', &buf);
-    // // if(!subs) return 0;
-
-    // //BIG BOI BUG FIX!!
-    // fprintf(OUTFILE, "%s\n", *(regNames+instr->rd));
-    // fprintf(OUTFILE, "i am slow????");
-    // printf("%s\n", *(regNames+instr->rd));
-
-    // free(subs);
-    // free(buf);
-    // return 6767;
-
     //use switch/cases to manipulate the MIPSinstr node as well as print in its specified pretty format
-    //  printf("%d\n",((MIPSinstr *)p->data)->pretty);
-    // printf("%d\n",((MIPSinstr *)p->data)->usagecnt);
-
-    //base format for the cases below**
-    //fprintf(OUTFILE, "%s %s\n", ((MIPSinstr *)p->data)->mnemonic);
-    //TODO: fix this string array!!!
     switch(((MIPSinstr *)p->data)->pretty) {
         case 0:
             fprintf(OUTFILE, "%s %s\n", ((MIPSinstr *)p->data)->mnemonic,*(regNames+instr->rd));
@@ -284,10 +263,7 @@ int printInstr(MIPSfields* instr, list_t* MIPSinstrList, char** regNames, FILE* 
 
 
     ((MIPSinstr *)p->data)->usagecnt++;
-    // MIPSinstr_Printer(p->data, stdout);
-
-    // free(subs);
-    // free(buf);
+    
     return 1;
 }
 
