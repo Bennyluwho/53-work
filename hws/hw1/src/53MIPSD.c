@@ -71,6 +71,8 @@ int main(int argc, char* argv[]) {
     // Create space for 1D array for the register names - still need to initialize!
     char** regNames  = calloc(32, sizeof(char*));     
     // INSERT YOUR IMPLEMENTATION HERE
+    int exit_status = 0;
+
     FILE *in  = NULL;
     FILE *out = NULL;
     FILE *imap = NULL;
@@ -78,10 +80,14 @@ int main(int argc, char* argv[]) {
     list_t *imapList = NULL;
 
     char *buf = NULL;
+
+    unsigned char *bytes = NULL;
+
     if (INFILE != NULL) {
         in = fopen(INFILE, "rb");
         if (in == NULL) {
-            return 2;
+            exit_status = 2;
+            goto MAIN_DONE;
         }
     } else {
         in = stdin;
@@ -90,81 +96,89 @@ int main(int argc, char* argv[]) {
     if (OUTFILE != NULL) {
         out = fopen(OUTFILE, "w");
         if (out == NULL) {
-            return 2;
+            exit_status = 2;
+            goto MAIN_DONE;
         }
     } else {
         out = stdout;
     }
-    
+
     imap = fopen(imapfile, "r");
     if (imap == NULL) {
-        return 2;
+        exit_status = 3;
+        goto MAIN_DONE;
     }
 
     imapList = createMIPSinstrList(imap);
     if (imapList == NULL) {
-        return 3;
+        exit_status = 3;
+        goto MAIN_DONE;
     }
 
-    char *src = (NUMERIC ? numericRegisters : humanRegisters);
+    {
+        char *src = (NUMERIC ? numericRegisters : humanRegisters);
 
-    size_t len = 0;
-    char *s = src;
-    while (*s != '\0') {
-        len++;
-        s++;
-    }
-
-    buf = (char *)malloc(len + 1);
-    if (buf == NULL) {
-        return 1;
-    }
-
-    char *d = buf;
-    s = src;
-    while (*s != '\0') {
-        *d = *s;
-        d++;
-        s++;
-    }
-    *d = '\0';
-
-    getSubstrings(buf, ',', regNames, 32);
-
-    while (1) {
-        unsigned char *bytes = (unsigned char *)malloc(4);
-        if (bytes == NULL) {
-            return 1;
+        size_t len = 0;
+        char *s = src;
+        while (*s != '\0') {
+            len++;
+            s++;
         }
 
+        buf = (char *)malloc(len + 1);
+        if (buf == NULL) {
+            exit_status = 1;
+            goto MAIN_DONE;
+        }
+
+        char *d = buf;
+        s = src;
+        while (*s != '\0') {
+            *d = *s;
+            d++;
+            s++;
+        }
+        *d = '\0';
+
+        getSubstrings(buf, ',', regNames, 32);
+    }
+
+    bytes = (unsigned char *)malloc(4);
+    if (bytes == NULL) {
+        exit_status = 1;
+        goto MAIN_DONE;
+    }
+
+    while (1) {
         size_t got = fread(bytes, 1, 4, in);
+
         if (got == 0) {
-            free(bytes);
             break;
         }
 
         if (got != 4) {
-            free(bytes);
-            return 3;
-            break;
+            exit_status = 3;
+            goto MAIN_DONE;
         }
 
         uint32_t instr =
-        ((uint32_t)(*(bytes + 0))      )
-        | ((uint32_t)(*(bytes + 1)) <<  8)
-        | ((uint32_t)(*(bytes + 2)) << 16)
-        | ((uint32_t)(*(bytes + 3)) << 24);
+              ((uint32_t)(*(bytes + 0))      )
+            | ((uint32_t)(*(bytes + 1)) <<  8)
+            | ((uint32_t)(*(bytes + 2)) << 16)
+            | ((uint32_t)(*(bytes + 3)) << 24);
 
-        free(bytes);
         MIPSfields f;
         parseMIPSfields(instr, &f);
 
         if (printInstr(&f, imapList, regNames, out) == 0) {
-            return 3;
+            exit_status = 3;
+            goto MAIN_DONE;
         }
     }
 
-    
+    MAIN_DONE:
+    if (bytes != NULL) free(bytes);
+
     if (imap != NULL) fclose(imap);
 
     if (imapList != NULL) {
@@ -173,7 +187,9 @@ int main(int argc, char* argv[]) {
 
     if (in != NULL && in != stdin) fclose(in);
     if (out != NULL && out != stdout) fclose(out);
-    free(regNames);  // free the memory we allocated because we are awesomely efficient programmers! 
+
+    free(regNames);
     free(buf);
-    return EXIT_SUCCESS;
+
+    return exit_status;
 }
