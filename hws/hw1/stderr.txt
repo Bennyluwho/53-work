@@ -1,0 +1,7 @@
+INFILE: (null)
+OUTFILE: (null)
+NUMERIC: 0
+IMAPFILE: rsrc/instr_map.txt
+addi $zero, $v0, 0x2a01
+addi $t8, $s2, 0x8d01
+jal 0x0
