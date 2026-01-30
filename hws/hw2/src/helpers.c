@@ -23,23 +23,23 @@ int init_heap_first_page(void) {
     pro_h->hid = HEADER_MAGIC;
     pro_h->padding_amount = 0;
 
-    ics_footer *pro_f = (ics_footer *) (base + H);
-    pro_f->block_size = pro_size;
+    ics_footer *pro_f = (ics_footer *)base;
     pro_f->fid = FOOTER_MAGIC;
+    pro_f->block_size = PACK(0, 1, 0);
 
     //initalize epilogue header at the end of page (8 bytes)
-    ics_header *epi_h = (ics_header *) (base + PAGE_SIZE - H);
-    epi_h->block_size = 0;
+    ics_header *epi_h = (ics_header *)(base + PAGE_SIZE - H);
     epi_h->hid = HEADER_MAGIC;
     epi_h->padding_amount = 0;
+    epi_h->block_size = PACK(0, 1, 0);   
 
     //initial free block ptr RIGHT AFTER the prologue block (16 bytes after the starting address)
-    ics_free_header *free_blk = (ics_free_header *) (base + pro_size);
+    ics_free_header *free_blk = (ics_free_header *)(base + F);
 
     //free block size is everything between the free_blk and epilouge
     size_t free_size = (size_t)((char *)epi_h - (char *)free_blk);
 
-    free_blk->header.block_size = free_size;
+    free_blk->header.block_size = PACK(free_size, 0, 0);
     free_blk->header.hid = HEADER_MAGIC;
     free_blk->header.padding_amount = 0;
 
@@ -48,11 +48,10 @@ int init_heap_first_page(void) {
 
     //initalize the free block's footer
     ics_footer *free_f = (ics_footer *) ((char *)free_blk + free_size - F);
-    free_f->block_size = free_size;
+    free_f->block_size = PACK(free_size, 0, 0);
     free_f-> fid = FOOTER_MAGIC;
 
     freelist_head = free_blk;
-
     heap_init = 1;
     return 0;
 }
@@ -85,12 +84,19 @@ static void insert_free_block(ics_free_header *blk) {
 
 ics_free_header *find_fit(size_t needed) {
     ics_free_header *curr = freelist_head;
+    ics_free_header *best = NULL;
 
     while (curr != NULL) {
-        if (curr->header.block_size >= needed) return curr;
+        size_t curr_size = GET_SIZE(curr->header.block_size);
+
+        if (curr_size >= needed) {
+            if (best == NULL || curr_size < GET_SIZE(best->header.block_size)) {
+                best = curr;
+            }
+        }
         curr = curr->next;
     }
-    return NULL;
+    return best;
 }
 
 void *place_block(ics_free_header *blk, size_t needed, size_t size) {
@@ -100,7 +106,7 @@ void *place_block(ics_free_header *blk, size_t needed, size_t size) {
     //minimum size for a free block
     size_t min_free = sizeof(ics_free_header) + F;
 
-    size_t blk_size = blk->header.block_size;
+    size_t blk_size = GET_SIZE(blk->header.block_size);
 
     //detach this block from the free list
     remove_free_block(blk);
@@ -108,28 +114,30 @@ void *place_block(ics_free_header *blk, size_t needed, size_t size) {
     //choose to either split or no split
     if (blk_size >= needed + min_free) {
     //SPLITS
-        
+        size_t pad = ALIGN(size) - size;
+        int pbit = (pad > 0);
+
         //allocated block uses exactly what is 'needed' ;)
-        blk->header.block_size = needed;
+        blk->header.block_size = PACK(needed, 1, pbit);
         blk->header.hid = HEADER_MAGIC;
 
         //padding = aligned_payload - requested_payload
-        blk->header.padding_amount = (uint64_t)(ALIGN(size) - size);
+        blk->header.padding_amount = (uint64_t)pad;
 
         ics_footer *alloc_f = (ics_footer *)((char*)blk + needed - F);
-        alloc_f->block_size = needed;
+        alloc_f->block_size = PACK(needed, 1, pbit);
         alloc_f->fid = FOOTER_MAGIC;
 
         //remainder free block located right after allocated block
         ics_free_header *rem = (ics_free_header *)((char *)blk + needed);
         size_t rem_size = blk_size - needed;
 
-        rem->header.block_size = rem_size;
+        rem->header.block_size = PACK(rem_size, 0, 0);
         rem->header.hid = HEADER_MAGIC;
         rem->header.padding_amount = 0;
 
         ics_footer *rem_f = (ics_footer*)((char *)rem + rem_size - F);
-        rem_f->block_size = rem_size;
+        rem_f->block_size = PACK(rem_size, 0, 0);
         rem_f->fid = FOOTER_MAGIC;
 
         rem->next = NULL;
@@ -138,18 +146,17 @@ void *place_block(ics_free_header *blk, size_t needed, size_t size) {
         insert_free_block(rem);
     } else {
     //no split, avoids splinters
-        //allocate the WHOLE block
-        blk->header.block_size = blk_size;
-        blk->header.hid = HEADER_MAGIC;
-
-        //payload cap in this full block
         size_t payload_cap = blk_size - (H + F);
+        size_t pad = payload_cap - size;
+        int pbit = (pad > 0);
 
-        //padding = cap - requested (already checked to be <= capacity)
-        blk->header.padding_amount = (uint64_t)(payload_cap - size);
+        //allocate the WHOLE block
+        blk->header.block_size = PACK(blk_size, 1, pbit);
+        blk->header.hid = HEADER_MAGIC;
+        blk->header.padding_amount = (uint64_t)pad;
 
         ics_footer *alloc_f = (ics_footer *)((char *)blk + blk_size - F);
-        alloc_f->block_size = blk_size;
+        alloc_f->block_size = PACK(blk_size, 1, pbit);
         alloc_f->fid = FOOTER_MAGIC;
     }
 
@@ -189,7 +196,7 @@ int grow_heap_one_page(void) {
     //Now we want to extend the ;ast real block if free
     char *old_brk = (char *)new_page;
     ics_footer *last_f = (ics_footer *)(old_brk - sizeof(ics_header) - sizeof(ics_footer));
-    size_t last_size = last_f->block_size;
+    size_t last_size = GET_SIZE(last_f->block_size);
 
     //block start is at the end of the block so block start = (footer_addr - block_size + footer_size)
     ics_free_header *last_blk = (ics_free_header *)((char*)last_f - last_size + sizeof(ics_footer));
@@ -197,14 +204,15 @@ int grow_heap_one_page(void) {
     //if the last block is free then it should be in the free list*****
     if (is_in_freelist(last_blk)) {
         //extend the last free block by one page
-        size_t new_size = last_blk->header.block_size + PAGE_SIZE;
+        size_t old_size = GET_SIZE(last_blk->header.block_size);
+        size_t new_size = old_size + PAGE_SIZE;
 
-        last_blk->header.block_size = new_size;
+        last_blk->header.block_size = PACK(new_size, 0, 0);
         last_blk->header.hid = HEADER_MAGIC;
         last_blk->header.padding_amount = 0;
 
         ics_footer *new_footer = (ics_footer *)((char *)last_blk + new_size - sizeof(ics_footer));
-        new_footer->block_size = new_size;
+        new_footer->block_size = PACK(new_size, 0, 0);
         new_footer->fid = FOOTER_MAGIC;
 
         write_epilogue();
@@ -215,15 +223,15 @@ int grow_heap_one_page(void) {
     //header should start at teh OLD epilogue header location
     ics_free_header *fresh = (ics_free_header *)((char *)new_page - sizeof(ics_header));
 
-    fresh->header.block_size = PAGE_SIZE + sizeof(ics_header);
+    fresh->header.block_size = PACK(PAGE_SIZE, 0, 0);
     fresh->header.hid = HEADER_MAGIC;
     fresh->header.padding_amount = 0;
 
     fresh->next = NULL;
     fresh->prev = NULL;
     
-    ics_footer *fresh_f = (ics_footer *)((char *)fresh + fresh->header.block_size - sizeof(ics_footer));
-    fresh_f->block_size = fresh->header.block_size;
+    ics_footer *fresh_f = (ics_footer *)((char *)fresh + PAGE_SIZE - sizeof(ics_footer));
+    fresh_f->block_size = PACK(PAGE_SIZE, 0, 0);;
     fresh_f->fid = FOOTER_MAGIC;
 
     //insert into freelist
