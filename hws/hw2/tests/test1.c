@@ -60,6 +60,64 @@ int main(int argc, char *argv[]) {
   info("Initialized heap\n");
   press_to_cont();
 
+printf("Heap start: %p\n", ics_get_brk());
+
+    /* Phase A: allocations */
+    void *ptr1 = ics_malloc(64);
+    ics_malloc(112);
+    void *ptr2 = ics_malloc(48);
+    ics_malloc(64);
+    void *ptr3 = ics_malloc(16);
+    ics_malloc(80);
+    ics_malloc(3552);
+
+    printf("\n=== After allocations ===\n");
+    ics_freelist_print();
+    press_to_cont();
+
+    /* Phase B: frees (order matters!) */
+    printf("\n=== Free ptr3 (16) ===\n");
+    ics_free(ptr3);
+    ics_freelist_print();
+
+    printf("\n=== Free ptr1 (64) ===\n");
+    ics_free(ptr1);
+    ics_freelist_print();
+
+    printf("\n=== Free ptr2 (48) ===\n");
+    ics_free(ptr2);
+    ics_freelist_print();
+
+    /* CRITICAL STATE */
+    printf("\n=== Freelists BEFORE malloc(8) ===\n");
+    ics_freelist_print();
+    press_to_cont();
+
+    /* Phase C: best-fit tests */
+    printf("\n=== malloc(8) ===\n");
+    void *ptr4 = ics_malloc(8);
+    printf("ptr4 = %p\n", ptr4);
+    ics_payload_print(ptr4);
+    ics_freelist_print();
+
+    printf("\n=== malloc(40) ===\n");
+    void *ptr5 = ics_malloc(40);
+    printf("ptr5 = %p\n", ptr5);
+    ics_payload_print(ptr5);
+    ics_freelist_print();
+
+    printf("\n=== malloc(30) ===\n");
+    void *ptr6 = ics_malloc(30);
+    printf("ptr6 = %p\n", ptr6);
+    ics_payload_print(ptr6);
+    ics_freelist_print();
+
+    printf("\n=== FINAL STATE ===\n");
+    ics_freelist_print();
+    press_to_cont();
+
+    ics_mem_fini();
+    return 0;
   // Print out title for first test
   printf("=== Test1: Allocation test ===\n");
   // Test #1: Allocate an integer
@@ -97,7 +155,6 @@ int main(int argc, char *argv[]) {
   press_to_cont();
 
 
-  return 0;
   // Free a variable
   printf("=== Test5: Free a block and snapshot ===\n");
   info("%s\n", "Freeing value1...");

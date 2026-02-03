@@ -73,27 +73,18 @@ static void remove_free_block(ics_free_header *blk) {
     blk->prev = NULL;
 }
 
-static void insert_free_block(ics_free_header *blk) {
-    blk->prev = NULL;
-    blk->next = freelist_head;
-
-    if (freelist_head != NULL) {
-        freelist_head->prev = blk;
-    }
-
-    freelist_head = blk;
-}
-
 ics_free_header *find_fit(size_t needed) {
     ics_free_header *curr = freelist_head;
     ics_free_header *best = NULL;
+    size_t best_sz = 0;
 
     while (curr != NULL) {
-        size_t curr_size = GET_SIZE(curr->header.block_size);
+        size_t csz = GET_SIZE(curr->header.block_size);
 
-        if (curr_size >= needed) {
-            if (best == NULL || curr_size < GET_SIZE(best->header.block_size)) {
+        if (csz >= needed) {
+            if (best == NULL || csz < best_sz || csz == best_sz) {
                 best = curr;
+                best_sz = csz;
             }
         }
         curr = curr->next;
@@ -145,7 +136,7 @@ void *place_block(ics_free_header *blk, size_t needed, size_t size) {
         rem->next = NULL;
         rem->prev = NULL;
 
-        insert_free_block(rem);
+        insert_free_block_ordered(rem);
     } else {
     //no split, avoids splinters
         size_t payload_cap = blk_size - (H + F);
@@ -237,7 +228,7 @@ int grow_heap_one_page(void) {
     fresh_f->fid = FOOTER_MAGIC;
 
     //insert into freelist
-    insert_free_block(fresh);
+    insert_free_block_ordered(fresh);
 
     write_epilogue();
     return 0;
