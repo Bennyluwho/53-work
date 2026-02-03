@@ -332,36 +332,22 @@ int valid_allocated_block(void *ptr, ics_header **out_h, ics_footer **out_f) {
 }
 
 ics_free_header *coalesce(ics_header *h) {
-    size_t H = sizeof(ics_header);
     size_t F = sizeof(ics_footer);
 
     size_t bsz = GET_SIZE(h->block_size);
     ics_free_header *start = (ics_free_header *)h;
 
-    //coalesce with the next block
-    ics_header *next_h = (ics_header *)((char *)h + bsz);
-    if (ptr_in_heap(next_h) && next_h->hid == HEADER_MAGIC && GET_SIZE(next_h->block_size) != 0) {
-        if(!GET_ALLOC(next_h->block_size)) {
-            size_t nsz = GET_SIZE(next_h->block_size);
-            ics_free_header *next_blk = (ics_free_header *)next_h;
-
-            remove_free_block(next_blk);
-
-            bsz += nsz;
-        }
-    }
-
     //coalesce with the previous block
-    ics_footer *prev_f = (ics_footer*)((char *)start - F);
+    ics_footer *prev_f = (ics_footer *)((char *)start - F);
 
-    if (ptr_in_heap(prev_f) && prev_f->fid == FOOTER_MAGIC) {
+    if (prev_f->fid == FOOTER_MAGIC) {
         size_t psz = GET_SIZE(prev_f->block_size);
 
         if (psz != 0) {
             ics_header *prev_h = (ics_header *)((char *)start - psz);
-            if(ptr_in_heap(prev_h) && prev_h->hid == HEADER_MAGIC && !GET_ALLOC(prev_h->block_size)) {
+            if (prev_h->hid == HEADER_MAGIC && !GET_ALLOC(prev_h->block_size)) {
                 ics_free_header *prev_blk = (ics_free_header *)prev_h;
-                
+
                 remove_free_block(prev_blk);
 
                 start = prev_blk;
@@ -373,7 +359,7 @@ ics_free_header *coalesce(ics_header *h) {
     //write merged free header/footer
     start->header.hid = HEADER_MAGIC;
     start->header.padding_amount = 0;
-    start->header.block_size = PACK(bsz,0,0);
+    start->header.block_size = PACK(bsz, 0, 0);
 
     ics_footer *new_f = (ics_footer *)((char *)start + bsz - F);
     new_f->fid = FOOTER_MAGIC;

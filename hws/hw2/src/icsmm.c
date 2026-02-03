@@ -56,12 +56,10 @@ int ics_free(void *ptr) {
         return -1;
     }
 
-    //mark as free
     size_t bsz = GET_SIZE(h->block_size);
     h->block_size = PACK(bsz, 0, 0);
     f->block_size = PACK(bsz, 0, 0);
 
-    //COALESCE AND INSERT SIZE ORDERED!
     ics_free_header *free_blk = coalesce(h);
     free_blk->next = NULL;
     free_blk->prev = NULL;
