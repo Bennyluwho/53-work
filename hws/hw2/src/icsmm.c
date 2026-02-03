@@ -48,5 +48,24 @@ void *ics_realloc(void *ptr, size_t size) {
 }
 
 int ics_free(void *ptr) { 
-    return -1; 
+    ics_header *h = NULL;
+    ics_footer *f = NULL;
+
+    if (!valid_allocated_block(ptr, &h, &f)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    //mark as free
+    size_t bsz = GET_SIZE(h->block_size);
+    h->block_size = PACK(bsz, 0, 0);
+    f->block_size = PACK(bsz, 0, 0);
+
+    //COALESCE AND INSERT SIZE ORDERED!
+    ics_free_header *free_blk = coalesce(h);
+    free_blk->next = NULL;
+    free_blk->prev = NULL;
+
+    insert_free_block_ordered(free_blk);
+    return 0; 
 }

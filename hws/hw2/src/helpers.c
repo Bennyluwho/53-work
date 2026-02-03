@@ -2,12 +2,14 @@
 
 int heap_init = 0;
 int pages_allocated = 0;
+void *heap_start = NULL; 
 
 /* Helper function definitions go here */
 int init_heap_first_page(void) {
     void *page = ics_inc_brk();
     if (page == ((void *) -1)) return -1;
     pages_allocated++;
+    heap_start = page;
 
     //since a char is 1 byte this will act as my pointer to the start of the page
     char *base = (char *) page;
@@ -246,4 +248,136 @@ int grow_heap_until_fit(size_t needed) {
         if (grow_heap_one_page() < 0) return -1;
     }
     return 0;
+}
+
+void insert_free_block_ordered(ics_free_header *blk) {
+    size_t bsz = GET_SIZE(blk->header.block_size);
+
+    blk->next = NULL;
+    blk->prev = NULL;
+
+    //empty check, if so then make this block the first in the list
+    if (freelist_head == NULL) {
+        freelist_head = blk;
+        return;
+    }
+
+    ics_free_header *curr = freelist_head;
+
+    while (curr != NULL) {
+        size_t csz = GET_SIZE(curr->header.block_size);
+
+        //largest to smallest insert before first block that is <= bsz while same size insert before
+        if (csz < bsz || csz == bsz) {
+            blk->next = curr;
+            blk->prev = curr->prev;
+
+            if (curr->prev != NULL) curr->prev->next = blk;
+            else freelist_head = blk;
+
+            curr->prev = blk;
+            return;
+        }
+        curr = curr->next;
+    }
+
+    //smaller than all existing then just append to end
+    curr = freelist_head;
+    while (curr->next != NULL) curr = curr->next;
+
+    curr->next = blk;
+    blk->prev = curr;
+}
+
+int ptr_in_heap(void *ptr) {
+    if (heap_start == NULL) return 0;
+    char *lo = (char *)heap_start;
+    char *hi = (char *)ics_get_brk();
+    return ((char *)ptr > lo && (char *)ptr < hi);
+}
+
+int valid_allocated_block(void *ptr, ics_header **out_h, ics_footer **out_f) {
+    if (ptr == NULL) return 0;
+
+    //payload must be 16 byte aligned
+    if (((uintptr_t)ptr % 16) != 0) return 0;
+
+    if (!ptr_in_heap(ptr)) return 0;
+
+    ics_header *h = (ics_header *)((char *)ptr - sizeof(ics_header));
+    if(!ptr_in_heap(h)) return 0;
+
+    if (h->hid != HEADER_MAGIC) return 0;
+
+    size_t bsz = GET_SIZE(h->block_size);
+    if (bsz == 0) return 0;
+
+    ics_footer *f = (ics_footer *)((char *)h + bsz - sizeof(ics_footer));
+    if(!ptr_in_heap(f)) return 0;
+
+    if (f->fid != FOOTER_MAGIC) return 0;
+
+    if (GET_SIZE(f->block_size) != bsz) return 0;
+
+    //allocated bit must be set for the header and footer
+    if (!GET_ALLOC(h->block_size)) return 0;
+    if (!GET_ALLOC(f->block_size)) return 0;
+
+    //if padding bit is set then padding amount should be greater than 0
+    if (GET_PADBIT(h->block_size) && h->padding_amount == 0) return 0;
+
+    *out_h = h;
+    *out_f = f;
+    return 1;
+}
+
+ics_free_header *coalesce(ics_header *h) {
+    size_t H = sizeof(ics_header);
+    size_t F = sizeof(ics_footer);
+
+    size_t bsz = GET_SIZE(h->block_size);
+    ics_free_header *start = (ics_free_header *)h;
+
+    //coalesce with the next block
+    ics_header *next_h = (ics_header *)((char *)h + bsz);
+    if (ptr_in_heap(next_h) && next_h->hid == HEADER_MAGIC && GET_SIZE(next_h->block_size) != 0) {
+        if(!GET_ALLOC(next_h->block_size)) {
+            size_t nsz = GET_SIZE(next_h->block_size);
+            ics_free_header *next_blk = (ics_free_header *)next_h;
+
+            remove_free_block(next_blk);
+
+            bsz += nsz;
+        }
+    }
+
+    //coalesce with the previous block
+    ics_footer *prev_f = (ics_footer*)((char *)start - F);
+
+    if (ptr_in_heap(prev_f) && prev_f->fid == FOOTER_MAGIC) {
+        size_t psz = GET_SIZE(prev_f->block_size);
+
+        if (psz != 0) {
+            ics_header *prev_h = (ics_header *)((char *)start - psz);
+            if(ptr_in_heap(prev_h) && prev_h->hid == HEADER_MAGIC && !GET_ALLOC(prev_h->block_size)) {
+                ics_free_header *prev_blk = (ics_free_header *)prev_h;
+                
+                remove_free_block(prev_blk);
+
+                start = prev_blk;
+                bsz += psz;
+            }
+        }
+    }
+
+    //write merged free header/footer
+    start->header.hid = HEADER_MAGIC;
+    start->header.padding_amount = 0;
+    start->header.block_size = PACK(bsz,0,0);
+
+    ics_footer *new_f = (ics_footer *)((char *)start + bsz - F);
+    new_f->fid = FOOTER_MAGIC;
+    new_f->block_size = PACK(bsz, 0, 0);
+
+    return start;
 }
