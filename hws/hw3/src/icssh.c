@@ -18,6 +18,7 @@ int main(int argc, char* argv[]) {
 	int exit_status;
 	pid_t pid;
 	pid_t wait_result;
+	int last_exit_status = -100;
 
 	// Refers to memory allocated by the readline(). This space is allocated for each user-entered job (the command-line entry). 
 	char* curline = NULL;
@@ -50,11 +51,51 @@ int main(int argc, char* argv[]) {
      		debug_print_job(job);
         #endif
 
+		proc_info* proc = job->procs;
 		// Example built-in: basic exit (modify for assignment)
 		if (strcmp(job->procs->cmd, "exit") == 0) {
 			cleanup(job, curline);
             return 0;
 		}
+		if (strcmp(job->procs->cmd, "cd") == 0) {
+			// directory is argv[1]; ignore argv[2], argv[3], ...
+			const char* dir = proc->argv[1];
+
+			if (dir == NULL) {
+				dir = getenv("HOME");   // cd with no args
+			}
+
+			// If HOME isn't set, chdir(NULL) would be bad; treat as failure
+			if (dir == NULL || chdir(dir) != 0) {
+				// Must print to STDERR the defined statement DIR_ERR
+				// (DIR_ERR already includes newline per your prompt)
+				fprintf(stderr, DIR_ERR);
+			} else {
+				// On success, print absolute path of new cwd + newline to STDOUT
+				char cwd[100];
+				if (getcwd(cwd, sizeof(cwd)) != NULL) {
+					printf("%s\n", cwd);
+				} else {
+					// If getcwd fails, safest is to treat it like an error message
+					// (Spec only mandates DIR_ERR on unsuccessful directory change,
+					// but printing something is better than nothing.)
+					perror("getcwd");
+				}
+			}
+
+			free_job(job);
+			free(curline);
+			continue; // go back to prompt; do NOT fork
+		}
+
+		if (strcmp(job->procs->cmd, "estatus") == 0) {
+			printf("%d\n", last_exit_status);
+
+			free_job(job);
+			free(curline);
+			continue;
+		}
+
 
 		// example of good error handling!
         // create the child proccess
@@ -77,6 +118,11 @@ int main(int argc, char* argv[]) {
 			if (wait_result < 0) {
 			    cleanup(job, curline);
 				exit(EXIT_FAILURE);
+			}
+
+			// Update estatus only for reaped *external* commands (children)
+			if (WIFEXITED(exit_status)) {
+				last_exit_status = WEXITSTATUS(exit_status);
 			}
 		}
 
