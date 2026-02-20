@@ -7,6 +7,8 @@
 #include "linkedlist.h"
 // A header file for helpers.c
 // Declare any additional functions in this file
+extern volatile sig_atomic_t bg_child_terminated;
+extern volatile sig_atomic_t bg_count;
 
 //background linked list functions
 int bgentry_compare_seconds(const void *a, const void *b);
@@ -22,6 +24,10 @@ char *history_get(int n);
 
 void reap_bg(list_t *bg_list);
 void remove_and_print_bgpid(list_t *bg_list, pid_t done);
+
+//signals
+void sigchld_handler(int sig);
+void sigusr2_handler(int sig);
 
 
 

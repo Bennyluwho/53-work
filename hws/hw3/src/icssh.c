@@ -13,12 +13,8 @@ void cleanup(job_info* job, char* curline)
 	validate_input(NULL);  
 }
 
-static volatile sig_atomic_t bg_child_terminated = 0;
-
-static void sigchld_handler(int sig) {
-    (void)sig;
-    bg_child_terminated = 1;
-}
+volatile sig_atomic_t bg_child_terminated = 0;
+volatile sig_atomic_t bg_count = 0;
 
 int main(int argc, char* argv[]) {
 	int exec_result;
@@ -52,6 +48,10 @@ int main(int argc, char* argv[]) {
 		perror("Failed to set SIGCHLD handler");
 		exit(EXIT_FAILURE);
 	}
+	if (signal(SIGUSR2, sigusr2_handler) == SIG_ERR) {
+		perror("Failed to set SIGUSR2 handler");
+		exit(EXIT_FAILURE);
+	}
 
     // print the prompt & wait for the user to enter commands string
 	while ((curline = readline(SHELL_PROMPT)) != NULL) {
@@ -76,6 +76,20 @@ int main(int argc, char* argv[]) {
      		debug_print_job(job);
         #endif
 
+		if (job->in_file && job->out_file &&
+			strcmp(job->in_file, job->out_file) == 0) {
+			fprintf(stderr, RD_ERR);
+			cleanup(job, curline);
+			continue;
+		}
+
+		if (job->out_file && job->procs->err_file &&
+			strcmp(job->out_file, job->procs->err_file) == 0) {
+			fprintf(stderr, RD_ERR);
+			cleanup(job, curline);
+			continue;
+		}
+
 		proc_info* proc = job->procs;
 
 		BUILTINS:
@@ -92,7 +106,7 @@ int main(int argc, char* argv[]) {
 			char *target = NULL;
 
 			if (strcmp(proc->cmd, "!") == 0) {
-				target = history_get(1);   // most recent
+				target = history_get(1);
 			} else {
 				int n = atoi(proc->cmd + 1);
 				target = history_get(n);
@@ -121,13 +135,14 @@ int main(int argc, char* argv[]) {
 		}
 
 		history_add(curline);
+
 		// Example built-in: basic exit (modify for assignment)
 		if (strcmp(job->procs->cmd, "exit") == 0) {
 			node_t *cur = bg_list->head;
 			while (cur != NULL) {
 				bgentry_t *e = (bgentry_t *)cur->data;
 				if (e != NULL) {
-					kill(e->pid, SIGTERM);   // ask it to terminate
+					kill(e->pid, SIGTERM); 
 				}
 				cur = cur->next;
 			}
@@ -145,36 +160,30 @@ int main(int argc, char* argv[]) {
 			cleanup(job, curline);
             return 0;
 		}
+		
 		if (strcmp(job->procs->cmd, "cd") == 0) {
-			// directory is argv[1]; ignore argv[2], argv[3], ...
 			const char* dir = proc->argv[1];
 
 			if (dir == NULL) {
-				dir = getenv("HOME");   // cd with no args
+				dir = getenv("HOME"); 
 			}
 
-			// If HOME isn't set, chdir(NULL) would be bad; treat as failure
 			if (dir == NULL || chdir(dir) != 0) {
-				// Must print to STDERR the defined statement DIR_ERR
-				// (DIR_ERR already includes newline per your prompt)
 				fprintf(stderr, DIR_ERR);
 			} else {
-				// On success, print absolute path of new cwd + newline to STDOUT
 				char cwd[100];
 				if (getcwd(cwd, sizeof(cwd)) != NULL) {
 					printf("%s\n", cwd);
 				} else {
-					// If getcwd fails, safest is to treat it like an error message
-					// (Spec only mandates DIR_ERR on unsuccessful directory change,
-					// but printing something is better than nothing.)
 					perror("getcwd");
 				}
 			}
 
 			free_job(job);
 			free(curline);
-			continue; // go back to prompt; do NOT fork
+			continue;
 		}
+
 		//returns the last return status (-100 if none)
 		if (strcmp(job->procs->cmd, "estatus") == 0) {
 			printf("%d\n", last_exit_status);
@@ -196,6 +205,170 @@ int main(int argc, char* argv[]) {
 			free(curline);
 			continue;
 		}
+
+		if (job->nproc > 1) {
+			if (job->in_file != NULL || job->out_file != NULL || job->procs->err_file != NULL) {
+				fprintf(stderr, RD_ERR);
+				cleanup(job, curline);
+				continue;
+			}
+		}
+
+	if (job->nproc > 1) {
+    	if (job->nproc == 2) {
+				int p[2];
+				if (pipe(p) < 0) {
+					perror("pipe");
+					cleanup(job, curline);
+					continue;
+				}
+
+				proc_info *p1 = job->procs;
+				proc_info *p2 = p1->next_proc;
+
+				pid_t pid1 = fork();
+				if (pid1 < 0) {
+					perror("fork");
+					close(p[0]); close(p[1]);
+					cleanup(job, curline);
+					continue;
+				}
+				if (pid1 == 0) {
+					dup2(p[1], STDOUT_FILENO);
+					close(p[0]);
+					close(p[1]);
+
+					execvp(p1->cmd, p1->argv);
+					printf(EXEC_ERR, p1->cmd);
+					exit(EXIT_FAILURE);
+				}
+
+				pid_t pid2 = fork();
+				if (pid2 < 0) {
+					perror("fork");
+					close(p[0]); close(p[1]);
+					cleanup(job, curline);
+					continue;
+				}
+				if (pid2 == 0) {
+					dup2(p[0], STDIN_FILENO);
+					close(p[1]);
+					close(p[0]);
+
+					execvp(p2->cmd, p2->argv);
+					printf(EXEC_ERR, p2->cmd);
+					exit(EXIT_FAILURE);
+				}
+
+				close(p[0]);
+				close(p[1]);
+
+				if (job->bg) {
+					bgentry_t *entry = malloc(sizeof(bgentry_t));
+					if (entry == NULL) {
+						perror("malloc");
+						cleanup(job, curline);
+						continue;
+					}
+					entry->job = job;     
+					entry->pid = pid2;    
+					entry->seconds = time(NULL);
+					InsertInOrder(bg_list, entry);
+					bg_count++;
+
+					free(curline);
+					continue;
+				} else {
+					waitpid(pid1, &exit_status, 0);
+					waitpid(pid2, &exit_status, 0);
+
+					if (WIFEXITED(exit_status)) last_exit_status = WEXITSTATUS(exit_status);
+
+					cleanup(job, curline);
+					continue;
+				}
+
+			} else if (job->nproc == 3) {
+
+				int p1[2], p2[2];
+				if (pipe(p1) < 0 || pipe(p2) < 0) {
+					perror("pipe");
+					cleanup(job, curline);
+					continue;
+				}
+
+				proc_info *a = job->procs;
+				proc_info *b = a->next_proc;
+				proc_info *c = b->next_proc;
+
+				pid_t pidA = fork();
+				if (pidA == 0) {
+					dup2(p1[1], STDOUT_FILENO);
+					close(p1[0]); close(p1[1]);
+					close(p2[0]); close(p2[1]);
+					execvp(a->cmd, a->argv);
+					printf(EXEC_ERR, a->cmd);
+					exit(EXIT_FAILURE);
+				}
+
+				pid_t pidB = fork();
+				if (pidB == 0) {
+					dup2(p1[0], STDIN_FILENO);
+					dup2(p2[1], STDOUT_FILENO);
+					close(p1[0]); close(p1[1]);
+					close(p2[0]); close(p2[1]);
+					execvp(b->cmd, b->argv);
+					printf(EXEC_ERR, b->cmd);
+					exit(EXIT_FAILURE);
+				}
+
+				pid_t pidC = fork();
+				if (pidC == 0) {
+					dup2(p2[0], STDIN_FILENO);
+					close(p1[0]); close(p1[1]);
+					close(p2[0]); close(p2[1]);
+					execvp(c->cmd, c->argv);
+					printf(EXEC_ERR, c->cmd);
+					exit(EXIT_FAILURE);
+				}
+
+				close(p1[0]); close(p1[1]);
+				close(p2[0]); close(p2[1]);
+
+				if (job->bg) {
+					bgentry_t *entry = malloc(sizeof(bgentry_t));
+					if (entry == NULL) {
+						perror("malloc");
+						cleanup(job, curline);
+						continue;
+					}
+					entry->job = job;
+					entry->pid = pidC;
+					entry->seconds = time(NULL);
+					InsertInOrder(bg_list, entry);
+					bg_count++;
+
+					free(curline);
+					continue;
+				} else {
+					waitpid(pidA, NULL, 0);
+					waitpid(pidB, NULL, 0);
+					waitpid(pidC, &exit_status, 0);
+
+					if (WIFEXITED(exit_status)) last_exit_status = WEXITSTATUS(exit_status);
+
+					cleanup(job, curline);
+					continue;
+				}
+
+			} else {
+				
+				fprintf(stderr, RD_ERR);
+				cleanup(job, curline);
+				continue;
+			}
+		}
+
 		// example of good error handling!
         // create the child proccess
 		if ((pid = fork()) < 0) {
@@ -205,6 +378,65 @@ int main(int argc, char* argv[]) {
 		if (pid == 0) {  //If zero, then it's the child process
             //get the first command in the job list to execute
 		    proc_info* proc = job->procs;
+			
+			// <
+			if (job->in_file != NULL) {
+			int in_fd = open(job->in_file, O_RDONLY);
+
+				if (in_fd < 0) {
+					fprintf(stderr, RD_ERR);
+					exit(EXIT_FAILURE);
+				}
+
+				if (dup2(in_fd, STDIN_FILENO) < 0) {
+					fprintf(stderr, RD_ERR);
+					close(in_fd);
+					exit(EXIT_FAILURE);
+				}
+
+				close(in_fd);
+			}
+
+			// >
+			if (job->out_file != NULL) {
+				int out_fd = open(job->out_file,
+								O_WRONLY | O_CREAT | O_TRUNC,
+								0644);
+
+				if (out_fd < 0) {
+					fprintf(stderr, RD_ERR);
+					exit(EXIT_FAILURE);
+				}
+
+				if (dup2(out_fd, STDOUT_FILENO) < 0) {
+					fprintf(stderr, RD_ERR);
+					close(out_fd);
+					exit(EXIT_FAILURE);
+				}
+
+				close(out_fd);
+			}
+
+			// 2>
+			if (job->procs->err_file != NULL) {
+				int err_fd = open(job->procs->err_file,
+								O_WRONLY | O_CREAT | O_TRUNC,
+								0644);
+
+				if (err_fd < 0) {
+					fprintf(stderr, RD_ERR);
+					exit(EXIT_FAILURE);
+				}
+
+				if (dup2(err_fd, STDERR_FILENO) < 0) {
+					fprintf(stderr, RD_ERR);
+					close(err_fd);
+					exit(EXIT_FAILURE);
+				}
+
+				close(err_fd);
+			}
+
 			exec_result = execvp(proc->cmd, proc->argv);
 			if (exec_result < 0) {  //Error checking
 				printf(EXEC_ERR, proc->cmd); 
@@ -229,12 +461,7 @@ int main(int argc, char* argv[]) {
 				entry->seconds = time(NULL);
 
 				InsertInOrder(bg_list, entry);
-
-				#ifdef DEBUG
-				printf("bg=%d line=%s\n", job->bg, job->line);
-				printf("len=%d\n", bg_list->length);
-				PrintLinkedList(bg_list, stdout);
-				#endif
+				bg_count++;
 
 				free(curline);
 				continue;
@@ -262,7 +489,6 @@ int main(int argc, char* argv[]) {
 	DeleteList(bg_list);
 	free(bg_list);
 	bg_list = NULL;
-
 	validate_input(NULL);
 
 #ifndef GS // DO NOT MODIFY. FOR AUTOGRADER

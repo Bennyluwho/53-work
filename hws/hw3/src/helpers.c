@@ -85,7 +85,7 @@ char *history_get(int n) {
 }
 
 void reap_bg(list_t *bg_list) {
-     int status;
+    int status;
     pid_t done;
 
     while ((done = waitpid(-1, &status, WNOHANG)) > 0) {
@@ -100,6 +100,7 @@ void reap_bg(list_t *bg_list) {
 
                 bgentry_t *removed = (bgentry_t *)RemoveByIndex(bg_list, idx);
                 bgentry_deleter(removed);
+                bg_count--;
 
                 printf(BG_TERM, (int)done, line_copy);
                 free(line_copy);
@@ -130,4 +131,45 @@ void remove_and_print_bgpid(list_t *bg_list, pid_t done){
         cur = cur->next;
         idx++;
     }
+}
+
+void sigchld_handler(int sig) {
+    (void)sig;
+    bg_child_terminated = 1;
+}
+
+void sigusr2_handler(int sig) {
+    (void)sig;
+
+    char buf[128];
+    size_t i = 0;
+
+    const char *prefix = "Num of Background processes: ";
+    while (prefix[i] != '\0' && i < sizeof(buf) - 1) {
+        buf[i] = prefix[i];
+        i++;
+    }
+
+    int n = (int)bg_count;
+    if (n < 0) n = 0;
+
+    char digits[16];
+    int d = 0;
+
+    if (n == 0) {
+        digits[d++] = '0';
+    } else {
+        while (n > 0 && d < (int)sizeof(digits)) {
+            digits[d++] = (char)('0' + (n % 10));
+            n /= 10;
+        }
+    }
+
+    while (d > 0 && i < sizeof(buf) - 1) {
+        buf[i++] = digits[--d];
+    }
+
+    if (i < sizeof(buf) - 1) buf[i++] = '\n';
+
+    (void)write(STDERR_FILENO, buf, i);
 }
