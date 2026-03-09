@@ -10,7 +10,7 @@ void cleanup(job_info* job, char* curline)
 
 	// validate_input(NULL) frees internal dynamically allocated memory reused call after call to process the user-entered job command repeatedly
 	// This call ensures valgrind is happy! 
-	validate_input(NULL);  
+	// validate_input(NULL);  
 }
 
 volatile sig_atomic_t bg_child_terminated = 0;
@@ -158,6 +158,7 @@ int main(int argc, char* argv[]) {
 			free(bg_list);
 			bg_list = NULL;
 			cleanup(job, curline);
+			validate_input(NULL);
             return 0;
 		}
 		

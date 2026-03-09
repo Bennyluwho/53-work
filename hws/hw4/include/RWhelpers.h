@@ -1,0 +1,7 @@
+#ifndef RWHELPERS_H
+#define RWHELPERS_H
+
+// INSERT FUNCTION DECLARATIONS HERE
+
+
+#endif
